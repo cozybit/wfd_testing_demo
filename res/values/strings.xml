@@ -6,5 +6,6 @@
     <string name="start_go_button_label">Start GO</string>
     <string name="start_discovery_button_label">Start Discovery</string>
     <string name="start_cli_button_label">Start CLI</string>
+    <string name="start_iperf_button_label">Start iperf</string>
 
 </resources>

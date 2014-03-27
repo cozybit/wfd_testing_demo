@@ -1,5 +1,13 @@
 package com.cozybit.wfd.tests;
 
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.Enumeration;
+
+import com.cozybit.wfd.tests.net.Iperf;
+import com.cozybit.wfd.tests.utils.Log;
+
 import android.net.wifi.WpsInfo;
 import android.net.wifi.p2p.WifiP2pConfig;
 import android.net.wifi.p2p.WifiP2pDevice;
@@ -12,7 +20,6 @@ import android.os.Bundle;
 import android.app.Activity;
 import android.content.Context;
 import android.content.IntentFilter;
-import android.util.Log;
 import android.view.Menu;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -24,7 +31,8 @@ public class WfdTestActivity extends Activity {
 
 	private Button mStartGO;
 	private Button mStartDiscovery;
-	private Button mStartCli;;
+	private Button mStartCli;
+	private Button mStartIperf;
 	
 	private WifiP2pManager mWfdManager;
 	private Channel mWfdCh;
@@ -35,6 +43,10 @@ public class WfdTestActivity extends Activity {
 	
 	private boolean mGoEnabled = false;
 	
+	enum modes { NONE, GO, CLI };
+	
+	private modes mMode;
+	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -43,6 +55,7 @@ public class WfdTestActivity extends Activity {
 		mStartGO = (Button) findViewById(R.id.startGoButton);
 		mStartDiscovery = (Button) findViewById(R.id.startDiscovery);
 		mStartCli = (Button) findViewById(R.id.startCliButton);
+		mStartIperf = (Button) findViewById(R.id.startIperf);
 
 		mStartGO.setOnClickListener(new OnClickListener() {
 			@Override
@@ -75,6 +88,13 @@ public class WfdTestActivity extends Activity {
 					}
 				}
 				connect(wfdConfig);
+			}
+		});
+		
+		mStartIperf.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				startIperf();
 			}
 		});
 		
@@ -126,12 +146,13 @@ public class WfdTestActivity extends Activity {
 				@Override
 				public void onSuccess() {
 					Log.d(TAG, "GO created succesfully!!!");
+					mMode = modes.GO;
 					mGoEnabled = true;
 				}
 				
 				@Override
 				public void onFailure(int reason) {
-					Log.d(TAG, "GO creating FAILED!!! Error: " + reason);
+					Log.d(TAG, "GO creating FAILED!!! Error: %d", reason);
 				}
 			});
 		} else {
@@ -139,30 +160,17 @@ public class WfdTestActivity extends Activity {
 				@Override
 				public void onSuccess() {
 					Log.d(TAG, "GO removed succesfully!!!");
+					mMode = modes.NONE;
 					mGoEnabled = false;
 				}
 				
 				@Override
 				public void onFailure(int reason) {
-					Log.d(TAG, "GO removed FAILED!!! Error: " + reason);
+					Log.d(TAG, "GO removed FAILED!!! Error: %d", reason);
 				}
 			});
 			
 		}
-	}
-	
-	private void connect(WifiP2pConfig config) {	
-		mWfdManager.connect(mWfdCh, config, new ActionListener() {
-			@Override
-			public void onSuccess() {
-				Log.d(TAG, "Cli starting to connect!!");
-			}
-			
-			@Override
-			public void onFailure(int reason) {
-				Log.d(TAG, "Cli FAILED initiating connection!! Error: " + reason);
-			}
-		});
 	}
 	
 	private void startDiscovery() {
@@ -174,22 +182,56 @@ public class WfdTestActivity extends Activity {
 
 	        @Override
 	        public void onFailure(int reasonCode) {
-	        	Log.d(TAG, "WFD Discovery FAILED starting. Error: " + reasonCode);
+	        	Log.d(TAG, "WFD Discovery FAILED starting. Error: %d", reasonCode);
 	        }
 		});		
 	}
 	
-	/*private void requestConnectionInfo() {
-		mWfdManager.requestConnectionInfo(mWfdCh, new ConnectionInfoListener() {
+	private void connect(WifiP2pConfig config) {	
+		mWfdManager.connect(mWfdCh, config, new ActionListener() {
+			@Override
+			public void onSuccess() {
+				Log.d(TAG, "Cli starting to connect!!");
+				mMode = modes.CLI;
+			}
 			
 			@Override
-			public void onConnectionInfoAvailable(WifiP2pInfo info) {
-				Log.d(TAG, "")
-				info.
-				// TODO Auto-generated method stub
-				
+			public void onFailure(int reason) {
+				Log.d(TAG, "Cli FAILED initiating connection!! Error: %d", reason);
 			}
-		})
-	}*/
+		});
+	}
+
+	private void startIperf() {
+		switch(mMode) {
+		case GO:
+			new Iperf(WfdTestActivity.this, 1).execute();
+			break;
+		case CLI:
+			new Iperf(this, "192.168.49.1","10M",15,1).execute();
+			break;
+		}
+	}
+	
+	public void printIpAddress() {
+		try {
+    		for(Enumeration<NetworkInterface> list = NetworkInterface.getNetworkInterfaces(); list.hasMoreElements();) {
+                    NetworkInterface iface = list.nextElement();
+
+                    if( iface.getDisplayName().startsWith("p2p-p2p0") && iface.isUp() ) {
+                    	Enumeration<InetAddress> ipList = iface.getInetAddresses();
+                    	if(ipList != null) {
+                    		while( ipList.hasMoreElements() ) {
+                        		InetAddress ip = ipList.nextElement();
+                        		if( ip.isSiteLocalAddress() )
+                        			Log.d(TAG, "The p2p ip address is: %d", ip.toString());
+                        	}
+                    	}
+                    }
+            }
+		} catch (SocketException e) {
+			e.printStackTrace();
+		}
+	}
 	
 }
